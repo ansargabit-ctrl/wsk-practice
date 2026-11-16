@@ -7,7 +7,8 @@ import bcrypt from "bcryptjs"
 declare module "express-session" {
     interface SessionData {
         userId: number,
-        email:string
+        email:string,
+        role:"user" | "admin"
     }
 }
 
@@ -40,6 +41,7 @@ app.get("/health",async(req,res)=>{
     console.log("working")
     res.send("working")
 })
+
 app.post("/login",async(req,res)=>{
     try {
         const {emailOrphone,password} = req.body
@@ -64,7 +66,7 @@ app.post("/login",async(req,res)=>{
 
         req.session.userId = user.id
         req.session.email = user.email
-        
+        req.session.role = user.role
         return res.redirect("/dashboard")
 
     } catch (err) {
@@ -90,22 +92,32 @@ app.post("/register",async(req,res)=>{
 
         req.session.userId = user.id
         req.session.email = user.email
-        
-        return res.redirect("/dashoboard")
+        req.session.role = user.role
+        return res.redirect("/dashboard")
     } catch(err) {
         console.log(err)
         return res.status(500).render("register",{message:"something went wrong"})
     }
 })
 
-app.get("/dashboard", requireLogin, (req, res) => {
-  res.render("dashboard", { user: req.session.email })
-})
 app.post("/logout",async(req,res)=>{
  req.session.destroy(()=>{
     res.redirect("/")
  })
 })
+app.get("/dashboard", requireLogin, async(req, res) => { 
+  const user_id = req.session.userId
+  const result = await pool.query("SELECT users.name,users.email,users.phone FROM users JOIN bookings ON users.id = bookings.user_id JOIN classes ON bookings.class_id = classes.id WHERE users.id = $1 ORDER BY bookings.id",[user_id])
+  const final = result.rows
+  res.render("dashboard", { user: req.session.email,data:final })
+})
+
+app.get("/users",requireLogin,async(req,res)=>{
+    const users = await pool.query("SELECT users.* FROM users JOIN bookings ON users.id = bookings.user_id JOIN classes ON bookings.class_id = classes.id ORDER BY booking.id")
+    res.render("dashboard", {data:users.rows})
+})
+
+
 const port = 3000;
 app.listen(port,()=>{
     console.log("server is starting")
